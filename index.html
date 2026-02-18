@@ -167,6 +167,63 @@ html, body {
 .status.listening { color: var(--rose); font-weight: 500; }
 .status.thinking { color: var(--blue); }
 
+/* LANGUAGE TOGGLE */
+.lang-toggle {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px; flex-shrink: 0; background: var(--white);
+}
+
+.lang-btn {
+  padding: 5px 12px; border-radius: 16px; border: 1.5px solid var(--border);
+  background: var(--cream); font-size: 0.75rem; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all 0.2s;
+  color: var(--mid);
+}
+
+.lang-btn.active {
+  background: var(--navy); color: white; border-color: var(--navy);
+}
+
+.lang-btn:active { transform: scale(0.95); }
+
+.lang-hint {
+  font-size: 0.7rem; color: var(--light); font-style: italic; margin-left: 4px;
+}
+
+/* PRONUNCIATION CARD */
+.pronun {
+  background: linear-gradient(135deg, #EEF2FF, #E8F4FD);
+  border: 1px solid #C7D7F0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-top: 8px;
+}
+
+.pronun-label {
+  font-weight: 600; color: var(--blue); font-size: 0.7rem;
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+}
+
+.pronun-phrase {
+  font-size: 1rem; font-weight: 600; color: var(--navy);
+  margin: 4px 0; line-height: 1.4;
+}
+
+.pronun-phonetic {
+  font-size: 0.8rem; color: var(--mid); font-style: italic; margin-bottom: 6px;
+}
+
+.pronun-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 14px; background: var(--blue); color: white;
+  border: none; border-radius: 16px; font-size: 0.75rem; font-weight: 600;
+  cursor: pointer; font-family: inherit; margin-right: 6px; margin-top: 4px;
+}
+
+.pronun-btn:active { transform: scale(0.95); }
+.pronun-btn.try { background: var(--green); }
+.pronun-btn.slow { background: var(--amber); }
+
 /* INPUT */
 .input-bar {
   display: flex; gap: 8px; align-items: flex-end;
@@ -311,9 +368,15 @@ html, body {
 
   <div class="status" id="statusBar"></div>
 
+  <div class="lang-toggle">
+    <button class="lang-btn active" id="langEN" onclick="setLang('en-US')">🇺🇸 EN</button>
+    <button class="lang-btn" id="langFR" onclick="setLang('fr-FR')">🇫🇷 FR</button>
+    <span class="lang-hint" id="langHint">Speak in English</span>
+  </div>
+
   <div class="input-bar">
     <button class="btn-round btn-mic" id="micBtn" onclick="toggleRecording()">🎤</button>
-    <textarea class="input-text" id="textInput" rows="1" placeholder="Type in English..."
+    <textarea class="input-text" id="textInput" rows="1" placeholder="English or French... / Anglais ou français..."
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
     <button class="btn-round btn-send" onclick="sendMessage()">➤</button>
   </div>
@@ -341,6 +404,15 @@ html, body {
 
 <script>
 let currentMode = 'conversation', conversationHistory = [], isRecording = false, recognition = null, synthesis = window.speechSynthesis, isProcessing = false;
+let currentLang = 'en-US'; // 'en-US' or 'fr-FR'
+
+function setLang(lang) {
+  currentLang = lang;
+  document.getElementById('langEN').classList.toggle('active', lang === 'en-US');
+  document.getElementById('langFR').classList.toggle('active', lang === 'fr-FR');
+  document.getElementById('langHint').textContent = lang === 'en-US' ? 'Speak in English' : 'Parlez en français';
+  if (recognition) recognition.lang = lang;
+}
 
 // ===== MEMORY SYSTEM =====
 // Stores learner profile, habits, favorite topics, vocabulary progress
@@ -519,9 +591,11 @@ if (SpeechRecognition) {
 function toggleRecording() { if (isRecording) stopRecording(); else startRecording(); }
 function startRecording() {
   if (!recognition || isProcessing) return;
+  recognition.lang = currentLang; // Set language before starting
   isRecording = true;
   const b = document.getElementById('micBtn'); b.classList.add('rec'); b.textContent = '⏹️';
-  setStatus('🎤 Listening... / J\'écoute...', 'listening');
+  const langLabel = currentLang === 'fr-FR' ? '🇫🇷 Listening in French...' : '🇺🇸 Listening in English...';
+  setStatus(`🎤 ${langLabel}`, 'listening');
   recognition.start();
 }
 function stopRecording() {
@@ -541,6 +615,26 @@ function speak(text) {
   const p = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en-US')) || voices.find(v => v.lang.startsWith('en'));
   if (p) u.voice = p;
   synthesis.speak(u);
+}
+
+function speakSlow(text) {
+  if (!synthesis) return;
+  synthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.4; // Very slow for pronunciation practice
+  u.pitch = 1;
+  const voices = synthesis.getVoices();
+  const p = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en-US')) || voices.find(v => v.lang.startsWith('en'));
+  if (p) u.voice = p;
+  synthesis.speak(u);
+}
+
+function tryPronunciation() {
+  // Switch to English recognition and start recording for pronunciation practice
+  setLang('en-US');
+  setStatus('🎤 Say it in English! / Dites-le en anglais !', 'listening');
+  startRecording();
 }
 if (synthesis) { synthesis.getVoices(); synthesis.onvoiceschanged = () => synthesis.getVoices(); }
 
@@ -642,7 +736,9 @@ async function sendMessage() {
   input.value = ''; input.style.height = 'auto';
   isProcessing = true;
   addMessage('user', text);
-  conversationHistory.push({ role: 'user', content: text });
+  // Tag the message with language so AI knows
+  const taggedText = currentLang === 'fr-FR' ? `[SPOKEN IN FRENCH] ${text}` : text;
+  conversationHistory.push({ role: 'user', content: taggedText });
   addLoading();
   setStatus('🤔 Thinking...', 'thinking');
 
@@ -651,6 +747,7 @@ async function sendMessage() {
     const frenchHelp = document.getElementById('frenchHelp').value;
 
     const memoryContext = getMemoryContext();
+    const inputLang = currentLang === 'fr-FR' ? 'FRENCH' : 'ENGLISH';
 
     const systemPrompt = `You are "Mon Assistant Anglais", a warm, patient, PROACTIVE English teacher and conversation partner for a 70-year-old French-speaking missionary.
 
@@ -662,6 +759,22 @@ YOU ARE A REAL CONVERSATION PARTNER — not just a Q&A bot. You must:
 5. Introduce new vocabulary naturally within conversation
 6. Reference things you remember about him from past conversations
 
+CRITICAL — LANGUAGE INPUT MODE: The user's current input language is set to ${inputLang}.
+${inputLang === 'FRENCH' ? `
+HE IS SPEAKING/TYPING IN FRENCH. This is expected and welcome!
+- First, acknowledge what he said in French so he knows you understood
+- Then give him the English translation he needs
+- Break the English phrase into simple pieces
+- Include pronunciation guidance using simple phonetic spelling a French speaker would understand
+- Always include the "pronunciation" field in your response with the key English phrase to practice
+- Example: He says "Je veux aller au parc avec mes petits-enfants" → You respond: 'Perfect! In English you would say: "I want to go to the park with my grandkids." Let\\'s break it down: "I want" (aïe ouantt), "to go" (tou gô), "to the park" (tou ze parc). Can you try saying the full sentence?'
+` : `
+HE IS SPEAKING/TYPING IN ENGLISH. 
+- If his English has errors, gently correct them
+- If his pronunciation was captured oddly by speech recognition (e.g., "I wan go" instead of "I want to go"), this reveals pronunciation issues — coach him on the sounds
+- Include the "pronunciation" field when teaching new phrases
+`}
+
 ${memoryContext ? `WHAT I REMEMBER ABOUT HIM:\n${memoryContext}\nUse this knowledge naturally! Call him by name if you know it. Mention his grandkids by name. Reference past topics. Build on words he's already learned.\n` : ''}
 CONTEXT:
 - He spends most time with his AMERICAN grandchildren (5 and under) who speak only English
@@ -671,16 +784,16 @@ CONTEXT:
 - Keep responses SHORT (2-4 sentences) but ALWAYS include a follow-up question or prompt
 - Mode: ${currentMode} | Difficulty: ${difficulty} | French help: ${frenchHelp}
 
-CONVERSATION STYLE:
-- Be like a friendly neighbor chatting over coffee, not a textbook
-- Use his answers to ask deeper questions: if he says "I go to park", ask "That sounds lovely! What do your grandkids like to do at the park?"
-- Sprinkle in new vocabulary naturally: "By the way, the word for 'balançoire' is 'swing'!"
-- Celebrate every attempt, no matter how imperfect
-- Sometimes pretend to be his grandchild: "Grandpa! Grandpa! Can we make cookies? What do you say?"
-- If you know his grandkids' names, use them in roleplay!
+PRONUNCIATION COACHING:
+- When teaching a new phrase, include phonetic pronunciation using sounds a French speaker understands
+- Use French-friendly phonetics: "th" → "z" sound, "r" → note it's different from French R, "w" → "ou", etc.
+- Examples: "the" → "ze", "with" → "ouiz", "church" → "tchurtch", "children" → "tchil-drenne"
+- Break long phrases into small chunks he can practice piece by piece
+- If speech recognition captured something odd, explain what the correct pronunciation should be
 
 RESPOND IN VALID JSON ONLY:
-{"response":"Your conversational English response — MUST end with a question or prompt to keep talking","correction":"HTML with <span class='wrong'>mistake</span> → <span class='right'>fix</span> or null if no errors","french_translation":"Brief French translation","encouragement":"Short warm praise or null","speak_text":"Clean text version for text-to-speech (no emoji, no special chars)","new_words_taught":"Comma-separated list of new English words introduced in this response, or null","mistake_pattern":"Brief description of grammar mistake pattern if any, or null"}`;
+{"response":"Your conversational response — MUST end with a question or prompt","correction":"HTML correction or null","french_translation":"French translation of your response","encouragement":"Short warm praise or null","speak_text":"Clean text for text-to-speech (no emoji)","pronunciation":"The KEY English phrase to practice with phonetic guide like: I want to go (aïe ouantt tou gô) — or null if not teaching a phrase","new_words_taught":"Comma-separated new words or null","mistake_pattern":"Grammar mistake pattern or null"}`;
+
 
 
     const response = await fetch('/api/chat', {
@@ -698,6 +811,32 @@ RESPOND IN VALID JSON ONLY:
 
     conversationHistory.push({ role: 'assistant', content: parsed.response });
     addMessage('ai', parsed.response, parsed.correction, parsed.french_translation);
+
+    // Pronunciation practice card
+    if (parsed.pronunciation) {
+      const chat = document.getElementById('chatArea');
+      const pCard = document.createElement('div');
+      pCard.className = 'msg ai';
+      const pAvi = document.createElement('div');
+      pAvi.className = 'avi ai';
+      pAvi.textContent = '🗣️';
+      const pBub = document.createElement('div');
+      pBub.className = 'bub';
+      pBub.innerHTML = `
+        <div class="pronun">
+          <div class="pronun-label">🗣️ Pronunciation Practice / Prononciation</div>
+          <div class="pronun-phrase">${parsed.pronunciation.split('(')[0].trim()}</div>
+          <div class="pronun-phonetic">${parsed.pronunciation.includes('(') ? '🔤 ' + parsed.pronunciation.substring(parsed.pronunciation.indexOf('(')) : ''}</div>
+          <button class="pronun-btn" onclick="speak('${parsed.pronunciation.split('(')[0].trim().replace(/'/g, "\\'")}')">🔊 Listen</button>
+          <button class="pronun-btn slow" onclick="speakSlow('${parsed.pronunciation.split('(')[0].trim().replace(/'/g, "\\'")}')">🐢 Slow</button>
+          <button class="pronun-btn try" onclick="tryPronunciation()">🎤 Try it!</button>
+        </div>
+      `;
+      pCard.appendChild(pAvi);
+      pCard.appendChild(pBub);
+      chat.appendChild(pCard);
+      chat.scrollTop = chat.scrollHeight;
+    }
 
     // Learn from this exchange
     learnFromConversation(text, parsed.response);
