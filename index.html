@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mon Assistant Anglais</title>
+<meta name="description" content="English learning companion for French-speaking grandparents">
+<meta name="theme-color" content="#1B2A4A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mon Assistant">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #1B2A4A;
+  --blue: #4A7CB5;
+  --green: #5A9E6F;
+  --amber: #D4913B;
+  --amber-bg: #FFF3E0;
+  --rose: #C47A7A;
+  --cream: #FDF8F0;
+  --white: #FFFFFF;
+  --dark: #2C2C2C;
+  --mid: #5A5A5A;
+  --light: #8A8A8A;
+  --border: #E8E0D8;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--cream);
+  color: var(--dark);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  height: 100dvh;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  max-width: 768px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--navy);
+  color: var(--white);
+  flex-shrink: 0;
+}
+
+.header-left h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: -0.3px; }
+.header-left span { font-size: 0.7rem; opacity: 0.7; }
+
+.header-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.15); color: white; font-size: 1rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.header-btn:active { background: rgba(255,255,255,0.3); }
+
+/* TABS */
+.tabs { display: flex; background: var(--white); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+
+.tab {
+  flex: 1; padding: 10px 4px; text-align: center; font-size: 0.8rem; font-weight: 500;
+  color: var(--light); border: none; background: none; cursor: pointer;
+  border-bottom: 3px solid transparent; font-family: inherit; transition: all 0.2s;
+}
+
+.tab.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+.tab:active { background: rgba(0,0,0,0.03); }
+
+/* CHAT */
+.chat {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
+
+.welcome {
+  background: var(--white); border-radius: 16px; padding: 20px 16px;
+  text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 12px;
+}
+
+.welcome h2 { font-size: 1.2rem; color: var(--navy); margin-bottom: 6px; font-weight: 600; }
+.welcome p { font-size: 0.85rem; color: var(--mid); line-height: 1.5; margin-bottom: 4px; }
+.welcome .fr { color: var(--light); font-style: italic; font-size: 0.8rem; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+
+.chip {
+  padding: 8px 14px; background: var(--cream); border: 1.5px solid var(--border);
+  border-radius: 20px; font-size: 0.78rem; font-weight: 500; cursor: pointer;
+  font-family: inherit; color: var(--mid); transition: all 0.2s; white-space: nowrap;
+}
+.chip:active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+
+/* MESSAGES */
+.msg { display: flex; gap: 8px; margin-bottom: 12px; animation: fadeIn 0.3s ease; align-items: flex-start; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.msg.user { flex-direction: row-reverse; }
+
+.avi {
+  width: 32px; height: 32px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;
+}
+.avi.ai { background: linear-gradient(135deg, var(--navy), var(--blue)); }
+.avi.me { background: linear-gradient(135deg, var(--rose), #D49A9A); }
+
+.bub {
+  max-width: 82%; padding: 10px 14px; border-radius: 16px;
+  font-size: 0.9rem; line-height: 1.55; word-wrap: break-word;
+}
+
+.msg.ai .bub {
+  background: var(--white); border: 1px solid var(--border);
+  border-bottom-left-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.msg.user .bub { background: var(--navy); color: var(--white); border-bottom-right-radius: 4px; }
+
+.bub-speak {
+  display: inline-block; margin-top: 6px; padding: 4px 10px;
+  background: rgba(74,124,181,0.1); border: none; border-radius: 12px;
+  font-size: 0.75rem; color: var(--blue); cursor: pointer; font-family: inherit; font-weight: 500;
+}
+.bub-speak:active { background: rgba(74,124,181,0.2); }
+
+.corr {
+  background: var(--amber-bg); border-left: 3px solid var(--amber);
+  border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 0.8rem; line-height: 1.5;
+}
+.corr-label { font-weight: 600; color: var(--amber); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+.corr .wrong { text-decoration: line-through; color: var(--rose); opacity: 0.7; }
+.corr .right { color: var(--green); font-weight: 600; }
+
+.tran { font-size: 0.78rem; color: var(--light); font-style: italic; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+
+.enc {
+  background: #E8F5E9; border-radius: 10px; padding: 6px 12px;
+  margin: -4px 0 12px 40px; font-size: 0.8rem; color: var(--green);
+  font-weight: 500; animation: fadeIn 0.3s ease;
+}
+
+.dots { display: inline-flex; gap: 4px; padding: 6px 0; }
+.dots span { width: 6px; height: 6px; background: var(--blue); border-radius: 50%; animation: bounce 1.4s ease infinite; }
+.dots span:nth-child(2) { animation-delay: 0.2s; }
+.dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+/* STATUS */
+.status { text-align: center; font-size: 0.75rem; color: var(--light); padding: 4px; min-height: 22px; flex-shrink: 0; }
+.status.listening { color: var(--rose); font-weight: 500; }
+.status.thinking { color: var(--blue); }
+
+/* INPUT */
+.input-bar {
+  display: flex; gap: 8px; align-items: flex-end;
+  padding: 8px 12px 12px; background: var(--white);
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+
+.input-text {
+  flex: 1; padding: 10px 14px; border: 2px solid var(--border); border-radius: 22px;
+  font-size: 16px; font-family: inherit; background: var(--cream); color: var(--dark);
+  outline: none; resize: none; min-height: 44px; max-height: 100px; line-height: 1.4;
+  transition: border-color 0.2s;
+}
+.input-text:focus { border-color: var(--blue); }
+.input-text::placeholder { color: var(--light); }
+
+.btn-round {
+  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+  flex-shrink: 0; transition: transform 0.15s;
+}
+.btn-round:active { transform: scale(0.92); }
+.btn-mic { background: var(--navy); color: white; }
+.btn-mic.rec { background: var(--rose); animation: pulse 1.5s ease infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(196,122,122,0.4); } 50% { box-shadow: 0 0 0 12px rgba(196,122,122,0); } }
+.btn-send { background: var(--blue); color: white; }
+
+/* SETTINGS DRAWER */
+.drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; }
+.drawer-overlay.open { display: block; }
+
+.drawer {
+  position: fixed; top: 0; right: -300px; width: 280px; max-width: 80vw;
+  height: 100%; background: var(--white); z-index: 101; transition: right 0.3s ease;
+  padding: 24px 20px; overflow-y: auto; box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+}
+.drawer.open { right: 0; }
+.drawer h3 { font-size: 1rem; color: var(--navy); margin-bottom: 20px; }
+.drawer label { display: block; font-size: 0.8rem; color: var(--mid); margin-bottom: 6px; font-weight: 500; }
+.drawer select, .drawer input[type="range"] {
+  width: 100%; margin-bottom: 18px; padding: 10px; border: 1px solid var(--border);
+  border-radius: 10px; font-family: inherit; font-size: 0.85rem; background: var(--cream);
+}
+.drawer-close {
+  position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;
+  border-radius: 50%; border: none; background: var(--cream); font-size: 1rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+
+/* TABLET */
+@media (min-width: 768px) {
+  .app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .bub { max-width: 70%; font-size: 0.95rem; }
+  .chip { font-size: 0.85rem; padding: 10px 18px; }
+  .welcome h2 { font-size: 1.4rem; }
+  .welcome p { font-size: 0.9rem; }
+  .header-left h1 { font-size: 1.25rem; }
+  .input-text { font-size: 16px; }
+  .chat { padding: 16px 20px; }
+}
+
+/* DESKTOP */
+@media (min-width: 1024px) {
+  .app { max-width: 700px; border-radius: 16px; margin-top: 20px; height: calc(100dvh - 40px); box-shadow: 0 4px 30px rgba(0,0,0,0.1); }
+}
+
+/* SMALL PHONES */
+@media (max-width: 360px) {
+  .chip { font-size: 0.7rem; padding: 6px 10px; }
+  .bub { font-size: 0.82rem; padding: 8px 10px; }
+  .header-left h1 { font-size: 1rem; }
+  .tab { font-size: 0.72rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="header-left">
+      <h1>📚 Mon Assistant Anglais</h1>
+      <span>Votre compagnon pour apprendre l'anglais</span>
+    </div>
+    <div class="header-right">
+      <button class="header-btn" onclick="openSettings()">⚙️</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="conversation" onclick="setMode('conversation')">💬 Chat</button>
+    <button class="tab" data-mode="lesson" onclick="setMode('lesson')">📖 Lesson</button>
+    <button class="tab" data-mode="practice" onclick="setMode('practice')">🎯 Practice</button>
+  </div>
+
+  <div class="chat" id="chatArea">
+    <div class="welcome" id="welcomeCard">
+      <h2>Bienvenue, Grand-Papa!</h2>
+      <p>I'll help you talk with your grandchildren and respond with confidence!</p>
+      <p class="fr">Je vous aiderai à parler avec vos petits-enfants avec confiance !</p>
+      <div class="chips">
+        <button class="chip" onclick="startTopic('grandkids')">👶 Grandkids</button>
+        <button class="chip" onclick="startTopic('understand')">👂 Understand Kids</button>
+        <button class="chip" onclick="startTopic('stories')">📖 Stories</button>
+        <button class="chip" onclick="startTopic('playground')">🎠 Park & Play</button>
+        <button class="chip" onclick="startTopic('greeting')">👋 Greetings</button>
+        <button class="chip" onclick="startTopic('church')">⛪ Faith</button>
+        <button class="chip" onclick="startTopic('daily')">🌅 Daily Life</button>
+        <button class="chip" onclick="startTopic('health')">🏥 Health</button>
+        <button class="chip" onclick="startTopic('travel')">✈️ Travel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="status" id="statusBar"></div>
+
+  <div class="input-bar">
+    <button class="btn-round btn-mic" id="micBtn" onclick="toggleRecording()">🎤</button>
+    <textarea class="input-text" id="textInput" rows="1" placeholder="Type in English..."
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+    <button class="btn-round btn-send" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeSettings()"></div>
+<div class="drawer" id="drawer">
+  <button class="drawer-close" onclick="closeSettings()">✕</button>
+  <h3>⚙️ Settings / Paramètres</h3>
+  <label>🔊 Voice Speed / Vitesse</label>
+  <input type="range" id="speechRate" min="0.5" max="1.2" step="0.1" value="0.8">
+  <label>🌍 Difficulty / Difficulté</label>
+  <select id="difficulty">
+    <option value="beginner">🟢 Beginner / Débutant</option>
+    <option value="intermediate">🟡 Intermediate / Intermédiaire</option>
+    <option value="advanced">🔴 Advanced / Avancé</option>
+  </select>
+  <label>💬 French Help / Aide en français</label>
+  <select id="frenchHelp">
+    <option value="always">Always / Toujours</option>
+    <option value="sometimes">Sometimes / Parfois</option>
+    <option value="rarely">Rarely / Rarement</option>
+  </select>
+</div>
+
+<script>
+let currentMode = 'conversation', conversationHistory = [], isRecording = false, recognition = null, synthesis = window.speechSynthesis, isProcessing = false;
+
+function openSettings() { document.getElementById('drawerOverlay').classList.add('open'); document.getElementById('drawer').classList.add('open'); }
+function closeSettings() { document.getElementById('drawerOverlay').classList.remove('open'); document.getElementById('drawer').classList.remove('open'); }
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  recognition.onresult = (e) => {
+    let t = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+    document.getElementById('textInput').value = t;
+    if (e.results[e.results.length - 1].isFinal) { stopRecording(); setTimeout(() => sendMessage(), 300); }
+  };
+  recognition.onerror = () => { stopRecording(); setStatus('⚠️ Try again / Réessayez'); };
+  recognition.onend = () => { if (isRecording) stopRecording(); };
+} else { document.getElementById('micBtn').style.display = 'none'; }
+
+function toggleRecording() { if (isRecording) stopRecording(); else startRecording(); }
+function startRecording() {
+  if (!recognition || isProcessing) return;
+  isRecording = true;
+  const b = document.getElementById('micBtn'); b.classList.add('rec'); b.textContent = '⏹️';
+  setStatus('🎤 Listening... / J\'écoute...', 'listening');
+  recognition.start();
+}
+function stopRecording() {
+  isRecording = false;
+  const b = document.getElementById('micBtn'); b.classList.remove('rec'); b.textContent = '🎤';
+  setStatus('');
+  try { recognition.stop(); } catch(e) {}
+}
+
+function speak(text) {
+  if (!synthesis) return;
+  synthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = parseFloat(document.getElementById('speechRate').value);
+  const voices = synthesis.getVoices();
+  const p = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || voices.find(v => v.lang.startsWith('en-US')) || voices.find(v => v.lang.startsWith('en'));
+  if (p) u.voice = p;
+  synthesis.speak(u);
+}
+if (synthesis) { synthesis.getVoices(); synthesis.onvoiceschanged = () => synthesis.getVoices(); }
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+  clearChat();
+  if (mode === 'lesson') startLesson();
+  else if (mode === 'practice') startPractice();
+}
+
+const topicStarters = {
+  greeting: "Hello! Let's practice greetings. Try saying: 'Hello, my name is...' and tell me about your family.",
+  grandkids: "Let's practice talking with your grandchildren! 🧒 Imagine your grandchild says: \"Grandpa, grandpa! Look what I made!\" How would you respond?",
+  church: "Let's practice English for church and faith. Try: 'I am a missionary and I...'",
+  daily: "Let's talk about everyday life. Tell me about your day: 'Today I...'",
+  stories: "Let's practice reading stories to your grandkids! Start with: 'Once upon a time...'",
+  playground: "Your grandchild says: \"Grandpa, push me on the swing!\" Let's learn park phrases!",
+  travel: "Let's practice travel English! Try: 'Excuse me, where is the...'",
+  health: "Your grandchild cries: \"Grandpa, I have a boo-boo!\" Let's learn comfort words!",
+  understand: "American kids speak fast! Let's understand: 'I wanna', 'gimme', 'I don't wanna!' — I'll teach you.",
+};
+
+const frenchMap = {
+  greeting: "Pratiquons les salutations.", grandkids: "Pratiquons comment parler avec vos petits-enfants !",
+  church: "Pratiquons l'anglais pour l'église.", daily: "Parlons de la vie quotidienne.",
+  stories: "Pratiquons les histoires !", playground: "Apprenons les phrases pour le parc !",
+  travel: "Pratiquons l'anglais de voyage !", health: "Apprenons à réconforter les enfants.",
+  understand: "Apprenons à comprendre les enfants américains !"
+};
+
+function startTopic(topic) {
+  const w = document.getElementById('welcomeCard'); if (w) w.remove();
+  addMessage('ai', topicStarters[topic], null, frenchMap[topic]);
+  speak(topicStarters[topic]);
+}
+
+function startLesson() {
+  addMessage('ai',
+    "📖 Understanding Your Grandkids!\n\n🧒 What they say → 🇫🇷 Meaning:\n1. \"I wanna go outside\" → Je veux aller dehors\n2. \"Gimme that!\" → Donne-moi ça !\n3. \"I don't wanna!\" → Je ne veux pas !\n4. \"Grandpa, watch me!\" → Regarde-moi !\n5. \"Pick me up!\" → Prends-moi !\n6. \"That's not fair!\" → C'est pas juste !\n\n🗣️ Grandpa responds:\n• \"Wow, amazing!\" — Incroyable !\n• \"Come here, sweetheart\" — Viens, mon cœur\n• \"You're so brave!\" — Tu es courageux !\n\nTry saying: \"Wow, that's amazing!\"",
+    null, null
+  );
+  speak("Let's learn what your grandkids say. Try saying: Wow, that's amazing!");
+}
+
+function startPractice() {
+  const ex = [
+    { t: "tr", fr: "Viens ici, donne un câlin à grand-papa !", p: "Translate:" },
+    { t: "tr", fr: "Est-ce que tu veux jouer dehors ?", p: "Translate:" },
+    { t: "tr", fr: "Fais attention, c'est chaud !", p: "Translate:" },
+    { t: "re", en: "Grandpa! Look what I drew!", p: "Respond:" },
+    { t: "re", en: "I don't wanna take a nap!", p: "Comfort them:" },
+    { t: "re", en: "Can we have ice cream, pleeeease?", p: "Answer:" },
+    { t: "re", en: "Grandpa, I'm scared of the dark.", p: "Reassure them:" },
+    { t: "re", en: "Watch me, Grandpa! Watch me jump!", p: "Respond:" },
+    { t: "un", en: "Grandpa, gimme a piggyback ride!", p: "What does this mean? Respond:" }
+  ][Math.floor(Math.random() * 9)];
+  const txt = ex.t === "tr" ? `🎯 Practice!\n\n${ex.p}\n🇫🇷 "${ex.fr}"` : `🎯 Practice!\n\n${ex.p}\n🧒 "${ex.en}"`;
+  const spk = ex.t === "tr" ? `Translate: ${ex.fr}` : `Your grandchild says: ${ex.en}`;
+  addMessage('ai', txt, null, "Essayez de répondre en anglais !");
+  speak(spk);
+}
+
+function addMessage(role, text, correction, frenchTranslation) {
+  const w = document.getElementById('welcomeCard'); if (w) w.remove();
+  const chat = document.getElementById('chatArea');
+  const div = document.createElement('div'); div.className = `msg ${role === 'ai' ? 'ai' : 'user'}`;
+  const avi = document.createElement('div'); avi.className = `avi ${role === 'ai' ? 'ai' : 'me'}`; avi.textContent = role === 'ai' ? '📚' : '👤';
+  const bub = document.createElement('div'); bub.className = 'bub';
+  const txt = document.createElement('div'); txt.textContent = text; bub.appendChild(txt);
+  if (role === 'ai') { const sb = document.createElement('button'); sb.className = 'bub-speak'; sb.textContent = '🔊 Listen'; sb.onclick = () => speak(text); bub.appendChild(sb); }
+  if (correction) { const c = document.createElement('div'); c.className = 'corr'; c.innerHTML = `<div class="corr-label">✏️ Correction</div>${correction}`; bub.appendChild(c); }
+  const fh = document.getElementById('frenchHelp').value;
+  if (frenchTranslation && (fh === 'always' || (fh === 'sometimes' && Math.random() > 0.4))) { const t = document.createElement('div'); t.className = 'tran'; t.textContent = '🇫🇷 ' + frenchTranslation; bub.appendChild(t); }
+  div.appendChild(avi); div.appendChild(bub); chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addLoading() {
+  const chat = document.getElementById('chatArea');
+  const div = document.createElement('div'); div.className = 'msg ai'; div.id = 'loadingMsg';
+  const avi = document.createElement('div'); avi.className = 'avi ai'; avi.textContent = '📚';
+  const bub = document.createElement('div'); bub.className = 'bub';
+  bub.innerHTML = '<div class="dots"><span></span><span></span><span></span></div>';
+  div.appendChild(avi); div.appendChild(bub); chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
+}
+
+function removeLoading() { const el = document.getElementById('loadingMsg'); if (el) el.remove(); }
+function clearChat() { document.getElementById('chatArea').innerHTML = ''; conversationHistory = []; }
+function setStatus(text, type = '') { const b = document.getElementById('statusBar'); b.textContent = text; b.className = 'status ' + type; }
+
+async function sendMessage() {
+  const input = document.getElementById('textInput');
+  const text = input.value.trim();
+  if (!text || isProcessing) return;
+  input.value = ''; input.style.height = 'auto';
+  isProcessing = true;
+  addMessage('user', text);
+  conversationHistory.push({ role: 'user', content: text });
+  addLoading();
+  setStatus('🤔 Thinking...', 'thinking');
+
+  try {
+    const difficulty = document.getElementById('difficulty').value;
+    const frenchHelp = document.getElementById('frenchHelp').value;
+
+    const systemPrompt = `You are "Mon Assistant Anglais", a warm, patient English teacher for a 70-year-old French-speaking missionary.
+
+CONTEXT:
+- He spends most time with his AMERICAN grandchildren (5 and under) who speak only English
+- He needs to understand what kids say and respond warmly
+- Focus on REAL kid phrases: "I wanna", "gimme", "watch me!", "I'm scared", "pick me up!"
+- Teach warm grandpa responses: "Wow, great job!", "Come here sweetheart", "You're so brave!"
+- Include faith vocabulary when relevant
+- Keep responses SHORT (2-4 sentences max)
+- Mode: ${currentMode} | Difficulty: ${difficulty} | French help: ${frenchHelp}
+
+RESPOND IN VALID JSON ONLY:
+{"response":"Your English response","correction":"HTML with <span class='wrong'>mistake</span> → <span class='right'>fix</span> or null","french_translation":"Brief French translation","encouragement":"Short praise or null","speak_text":"Clean text for speech"}
+
+Correct gently. If perfect, praise warmly. If French input, help translate. Sometimes simulate grandchild speech.`;
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: systemPrompt, messages: conversationHistory.slice(-10) })
+    });
+
+    const data = await response.json();
+    removeLoading();
+    let raw = data.content.map(c => c.text || '').join('');
+    let parsed;
+    try { raw = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim(); parsed = JSON.parse(raw); }
+    catch(e) { parsed = { response: raw, correction: null, french_translation: null, encouragement: null, speak_text: raw }; }
+
+    conversationHistory.push({ role: 'assistant', content: parsed.response });
+    addMessage('ai', parsed.response, parsed.correction, parsed.french_translation);
+
+    if (parsed.encouragement) {
+      const enc = document.createElement('div'); enc.className = 'enc'; enc.textContent = '⭐ ' + parsed.encouragement;
+      document.getElementById('chatArea').appendChild(enc);
+      document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+    }
+    speak(parsed.speak_text || parsed.response);
+  } catch (error) {
+    removeLoading();
+    addMessage('ai', "Sorry, try again! / Désolé, réessayez !", null, "Veuillez réessayer.");
+  }
+  setStatus(''); isProcessing = false;
+}
+
+document.getElementById('textInput').addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
+
+// Keep chat scrolled when keyboard opens on mobile
+document.querySelectorAll('textarea').forEach(el => {
+  el.addEventListener('focus', () => { setTimeout(() => { document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight; }, 400); });
+});
+
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
+</script>
+</body>
+</html>
