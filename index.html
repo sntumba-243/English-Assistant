@@ -313,6 +313,139 @@ html, body {
 <script>
 let currentMode = 'conversation', conversationHistory = [], isRecording = false, recognition = null, synthesis = window.speechSynthesis, isProcessing = false;
 
+// ===== MEMORY SYSTEM =====
+// Stores learner profile, habits, favorite topics, vocabulary progress
+const MEMORY_KEY = 'mon_assistant_memory';
+
+function getMemory() {
+  try {
+    const raw = localStorage.getItem(MEMORY_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return {
+    name: null,                    // His name once he tells us
+    grandkidsNames: [],            // Names of grandchildren
+    sessionsCount: 0,              // How many times he's opened the app
+    totalMessages: 0,              // Total messages sent
+    lastVisit: null,               // Last time he used the app
+    favoriteTopics: {},            // { "grandkids": 12, "church": 5, ... } — count per topic
+    recentTopics: [],              // Last 5 topics discussed
+    wordsLearned: [],              // Words he's practiced successfully
+    commonMistakes: [],            // Patterns he struggles with
+    preferredGreetingStyle: null,  // "casual", "faith", "grandkids", "question"
+    factsAboutHim: [],             // Things he's shared: "lives in Iowa", "has 3 grandkids"
+    lastConversationSummary: null, // Brief summary of last chat
+    englishLevel: 'beginner',     // Tracks improvement over time
+    streakDays: 0,                 // Consecutive days practiced
+    lastStreakDate: null
+  };
+}
+
+function saveMemory(mem) {
+  try { localStorage.setItem(MEMORY_KEY, JSON.stringify(mem)); } catch(e) {}
+}
+
+// Update memory from AI response — called after each exchange
+function learnFromConversation(userText, aiResponse) {
+  const mem = getMemory();
+  mem.totalMessages++;
+  mem.lastVisit = new Date().toISOString();
+
+  // Track streak
+  const today = new Date().toDateString();
+  if (mem.lastStreakDate !== today) {
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    mem.streakDays = (mem.lastStreakDate === yesterday) ? mem.streakDays + 1 : 1;
+    mem.lastStreakDate = today;
+  }
+
+  // Detect and remember names
+  const nameMatch = userText.match(/my name is (\w+)/i) || userText.match(/I am (\w+)/i) || userText.match(/je m'appelle (\w+)/i);
+  if (nameMatch) mem.name = nameMatch[1];
+
+  // Detect grandkid names
+  const kidMatch = userText.match(/grandchild(?:ren)? (?:is |are |named? )(.+)/i) || 
+    userText.match(/petit[s-]?enfant[s]? (?:s'appell?e(?:nt)? )(.+)/i) ||
+    userText.match(/(?:his|her|their) name is (\w+)/i);
+  if (kidMatch) {
+    const names = kidMatch[1].split(/[,&and]+/).map(n => n.trim()).filter(n => n.length > 1);
+    names.forEach(n => { if (!mem.grandkidsNames.includes(n)) mem.grandkidsNames.push(n); });
+  }
+
+  // Extract facts (simple keyword detection)
+  const factPatterns = [
+    { re: /I live in (.+)/i, prefix: "Lives in" },
+    { re: /I am from (.+)/i, prefix: "From" },
+    { re: /I have (\d+) grandchild/i, prefix: "Has grandchildren:" },
+    { re: /my wife(?:'s name)? is (\w+)/i, prefix: "Wife's name:" },
+    { re: /I (?:go to|attend) (.+?) church/i, prefix: "Goes to church:" },
+    { re: /my favorite (.+)/i, prefix: "Favorite:" }
+  ];
+  factPatterns.forEach(({ re, prefix }) => {
+    const m = userText.match(re);
+    if (m) {
+      const fact = `${prefix} ${m[1]}`;
+      if (!mem.factsAboutHim.includes(fact)) {
+        mem.factsAboutHim.push(fact);
+        if (mem.factsAboutHim.length > 20) mem.factsAboutHim.shift();
+      }
+    }
+  });
+
+  // Detect topic preference from keywords
+  const topicKeywords = {
+    grandkids: /grandchild|grandkid|petit|grandson|granddaughter|baby|toddler/i,
+    church: /church|pray|god|faith|bible|mission|Jesus|lord|bless/i,
+    daily: /today|morning|breakfast|lunch|dinner|house|cook|clean|walk/i,
+    playground: /park|swing|slide|play|outside|garden|ball|run/i,
+    stories: /story|stories|book|read|once upon|tale/i,
+    health: /doctor|sick|hurt|pain|hospital|medicine|boo-boo/i,
+    travel: /airport|travel|plane|trip|visit|fly|hotel/i
+  };
+  Object.entries(topicKeywords).forEach(([topic, re]) => {
+    if (re.test(userText)) {
+      mem.favoriteTopics[topic] = (mem.favoriteTopics[topic] || 0) + 1;
+      if (!mem.recentTopics.includes(topic)) {
+        mem.recentTopics.unshift(topic);
+        if (mem.recentTopics.length > 5) mem.recentTopics.pop();
+      }
+    }
+  });
+
+  // Detect greeting style preference
+  if (mem.totalMessages > 3 && !mem.preferredGreetingStyle) {
+    // Default to grandkids-focused since that's his main context
+    mem.preferredGreetingStyle = 'grandkids';
+  }
+
+  saveMemory(mem);
+}
+
+// Build a memory summary string for the AI
+function getMemoryContext() {
+  const mem = getMemory();
+  let ctx = '';
+  
+  if (mem.name) ctx += `His name is ${mem.name}. `;
+  if (mem.grandkidsNames.length) ctx += `His grandchildren's names are: ${mem.grandkidsNames.join(', ')}. Use their names sometimes! `;
+  if (mem.factsAboutHim.length) ctx += `Things I know about him: ${mem.factsAboutHim.join('; ')}. `;
+  if (mem.sessionsCount > 1) ctx += `He has used this app ${mem.sessionsCount} times. `;
+  if (mem.streakDays > 1) ctx += `He's on a ${mem.streakDays}-day practice streak — encourage him! `;
+  if (mem.totalMessages > 0) ctx += `He has sent ${mem.totalMessages} messages total. `;
+  
+  if (Object.keys(mem.favoriteTopics).length) {
+    const sorted = Object.entries(mem.favoriteTopics).sort((a,b) => b[1] - a[1]);
+    ctx += `His favorite topics (most discussed first): ${sorted.map(([t,c]) => t).join(', ')}. Focus on these! `;
+  }
+  
+  if (mem.recentTopics.length) ctx += `Recent topics: ${mem.recentTopics.join(', ')}. `;
+  if (mem.wordsLearned.length) ctx += `Words he has learned: ${mem.wordsLearned.slice(-15).join(', ')}. Build on these! `;
+  if (mem.commonMistakes.length) ctx += `He often makes these mistakes: ${mem.commonMistakes.slice(-5).join('; ')}. Watch for these patterns. `;
+  if (mem.lastConversationSummary) ctx += `Last conversation summary: ${mem.lastConversationSummary}. `;
+  
+  return ctx;
+}
+
 function openSettings() { document.getElementById('drawerOverlay').classList.add('open'); document.getElementById('drawer').classList.add('open'); }
 function closeSettings() { document.getElementById('drawerOverlay').classList.remove('open'); document.getElementById('drawer').classList.remove('open'); }
 
@@ -392,7 +525,9 @@ const frenchMap = {
 function startTopic(topic) {
   const w = document.getElementById('welcomeCard'); if (w) w.remove();
   addMessage('ai', topicStarters[topic], null, frenchMap[topic]);
+  conversationHistory.push({ role: 'assistant', content: topicStarters[topic] });
   speak(topicStarters[topic]);
+  resetInactivityTimer();
 }
 
 function startLesson() {
@@ -464,21 +599,38 @@ async function sendMessage() {
     const difficulty = document.getElementById('difficulty').value;
     const frenchHelp = document.getElementById('frenchHelp').value;
 
-    const systemPrompt = `You are "Mon Assistant Anglais", a warm, patient English teacher for a 70-year-old French-speaking missionary.
+    const memoryContext = getMemoryContext();
 
+    const systemPrompt = `You are "Mon Assistant Anglais", a warm, patient, PROACTIVE English teacher and conversation partner for a 70-year-old French-speaking missionary.
+
+YOU ARE A REAL CONVERSATION PARTNER — not just a Q&A bot. You must:
+1. ALWAYS end your response with a question or prompt to keep the conversation going
+2. Be curious about his life, his grandkids, his faith, his day
+3. React naturally like a friend would — show surprise, empathy, humor, warmth
+4. Sometimes roleplay as his grandchild so he can practice responding
+5. Introduce new vocabulary naturally within conversation
+6. Reference things you remember about him from past conversations
+
+${memoryContext ? `WHAT I REMEMBER ABOUT HIM:\n${memoryContext}\nUse this knowledge naturally! Call him by name if you know it. Mention his grandkids by name. Reference past topics. Build on words he's already learned.\n` : ''}
 CONTEXT:
 - He spends most time with his AMERICAN grandchildren (5 and under) who speak only English
-- He needs to understand what kids say and respond warmly
-- Focus on REAL kid phrases: "I wanna", "gimme", "watch me!", "I'm scared", "pick me up!"
-- Teach warm grandpa responses: "Wow, great job!", "Come here sweetheart", "You're so brave!"
-- Include faith vocabulary when relevant
-- Keep responses SHORT (2-4 sentences max)
+- He needs to understand kid phrases: "I wanna", "gimme", "watch me!", "I'm scared", "pick me up!"
+- Teach grandpa responses: "Wow, great job!", "Come here sweetheart", "You're so brave!"
+- He is a missionary — faith is important to him
+- Keep responses SHORT (2-4 sentences) but ALWAYS include a follow-up question or prompt
 - Mode: ${currentMode} | Difficulty: ${difficulty} | French help: ${frenchHelp}
 
-RESPOND IN VALID JSON ONLY:
-{"response":"Your English response","correction":"HTML with <span class='wrong'>mistake</span> → <span class='right'>fix</span> or null","french_translation":"Brief French translation","encouragement":"Short praise or null","speak_text":"Clean text for speech"}
+CONVERSATION STYLE:
+- Be like a friendly neighbor chatting over coffee, not a textbook
+- Use his answers to ask deeper questions: if he says "I go to park", ask "That sounds lovely! What do your grandkids like to do at the park?"
+- Sprinkle in new vocabulary naturally: "By the way, the word for 'balançoire' is 'swing'!"
+- Celebrate every attempt, no matter how imperfect
+- Sometimes pretend to be his grandchild: "Grandpa! Grandpa! Can we make cookies? What do you say?"
+- If you know his grandkids' names, use them in roleplay!
 
-Correct gently. If perfect, praise warmly. If French input, help translate. Sometimes simulate grandchild speech.`;
+RESPOND IN VALID JSON ONLY:
+{"response":"Your conversational English response — MUST end with a question or prompt to keep talking","correction":"HTML with <span class='wrong'>mistake</span> → <span class='right'>fix</span> or null if no errors","french_translation":"Brief French translation","encouragement":"Short warm praise or null","speak_text":"Clean text version for text-to-speech (no emoji, no special chars)","new_words_taught":"Comma-separated list of new English words introduced in this response, or null","mistake_pattern":"Brief description of grammar mistake pattern if any, or null"}`;
+
 
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -496,6 +648,31 @@ Correct gently. If perfect, praise warmly. If French input, help translate. Some
     conversationHistory.push({ role: 'assistant', content: parsed.response });
     addMessage('ai', parsed.response, parsed.correction, parsed.french_translation);
 
+    // Learn from this exchange
+    learnFromConversation(text, parsed.response);
+
+    // Save new words taught
+    if (parsed.new_words_taught) {
+      const mem = getMemory();
+      parsed.new_words_taught.split(',').map(w => w.trim()).filter(Boolean).forEach(w => {
+        if (!mem.wordsLearned.includes(w)) {
+          mem.wordsLearned.push(w);
+          if (mem.wordsLearned.length > 100) mem.wordsLearned.shift();
+        }
+      });
+      saveMemory(mem);
+    }
+
+    // Save mistake patterns
+    if (parsed.mistake_pattern) {
+      const mem = getMemory();
+      if (!mem.commonMistakes.includes(parsed.mistake_pattern)) {
+        mem.commonMistakes.push(parsed.mistake_pattern);
+        if (mem.commonMistakes.length > 10) mem.commonMistakes.shift();
+      }
+      saveMemory(mem);
+    }
+
     if (parsed.encouragement) {
       const enc = document.createElement('div'); enc.className = 'enc'; enc.textContent = '⭐ ' + parsed.encouragement;
       document.getElementById('chatArea').appendChild(enc);
@@ -507,6 +684,7 @@ Correct gently. If perfect, praise warmly. If French input, help translate. Some
     addMessage('ai', "Sorry, try again! / Désolé, réessayez !", null, "Veuillez réessayer.");
   }
   setStatus(''); isProcessing = false;
+  resetInactivityTimer();
 }
 
 document.getElementById('textInput').addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
@@ -516,7 +694,181 @@ document.querySelectorAll('textarea').forEach(el => {
   el.addEventListener('focus', () => { setTimeout(() => { document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight; }, 400); });
 });
 
+// ===== AUTO-GREETING ON LAUNCH =====
+async function autoGreet() {
+  await new Promise(r => setTimeout(r, 800));
+
+  const w = document.getElementById('welcomeCard');
+  if (w) w.remove();
+
+  addLoading();
+
+  const mem = getMemory();
+  mem.sessionsCount++;
+  saveMemory(mem);
+
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const name = mem.name || 'Grand-Papa';
+  
+  let greeting;
+  const frenchGreetings = {
+    'morning': `Bonjour ${name} ! Comment allez-vous ce matin ?`,
+    'afternoon': `Bonjour ${name} ! Comment allez-vous cet après-midi ?`,
+    'evening': `Bonsoir ${name} ! Comment allez-vous ce soir ?`
+  };
+
+  // ===== ADAPTIVE GREETING BASED ON MEMORY =====
+  if (mem.sessionsCount <= 1) {
+    // FIRST TIME — warm welcome, get to know him
+    greeting = `Good ${timeOfDay}! Welcome! I am your English learning companion. My name is Assistant, and I am here to help you talk with your grandchildren in English. First, can you tell me your name? Try: "My name is..."`;
+  
+  } else if (mem.sessionsCount === 2) {
+    // SECOND TIME — recognize him
+    greeting = `Good ${timeOfDay}, ${name}! You came back! I'm so happy to see you again. ${mem.streakDays > 1 ? `You've been practicing ${mem.streakDays} days in a row — amazing!` : ''} What would you like to practice today?`;
+  
+  } else {
+    // RETURNING USER — personalized based on what we know
+    const parts = [`Good ${timeOfDay}, ${name}!`];
+
+    // Streak recognition
+    if (mem.streakDays > 2) {
+      parts.push(`${mem.streakDays} days in a row — you're doing wonderfully!`);
+    }
+
+    // Reference last visit timing
+    if (mem.lastVisit) {
+      const lastDate = new Date(mem.lastVisit);
+      const daysSince = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+      if (daysSince > 3) {
+        parts.push(`I missed you! It's been a few days.`);
+      }
+    }
+
+    // Reference grandkids by name if known
+    if (mem.grandkidsNames.length > 0) {
+      const kid = mem.grandkidsNames[Math.floor(Math.random() * mem.grandkidsNames.length)];
+      const kidQuestions = [
+        `How is ${kid} doing today?`,
+        `Did ${kid} say anything funny lately? Tell me in English!`,
+        `What did you and ${kid} do today?`,
+        `Did you play with ${kid} today?`
+      ];
+      parts.push(kidQuestions[Math.floor(Math.random() * kidQuestions.length)]);
+    
+    } else if (mem.favoriteTopics && Object.keys(mem.favoriteTopics).length > 0) {
+      // Reference favorite topic
+      const topTopic = Object.entries(mem.favoriteTopics).sort((a,b) => b[1] - a[1])[0][0];
+      const topicFollowups = {
+        grandkids: "How are your grandkids today? Tell me something they said!",
+        church: "How was church? Did you learn a new prayer in English?",
+        daily: "How is your day going? Tell me in English!",
+        playground: "Did you go to the park with the kids today?",
+        stories: "Did you read a story to your grandkids? Which one?",
+        health: "How are you feeling today? I hope everyone is healthy!",
+        travel: "Are you planning any trips? Tell me about it!"
+      };
+      parts.push(topicFollowups[topTopic] || "What would you like to practice today?");
+    
+    } else {
+      parts.push("What would you like to talk about today?");
+    }
+
+    // Mention recently learned words sometimes
+    if (mem.wordsLearned.length > 3 && Math.random() > 0.6) {
+      const recentWord = mem.wordsLearned[mem.wordsLearned.length - 1];
+      parts.push(`Do you remember the word "${recentWord}" from last time?`);
+    }
+
+    greeting = parts.join(' ');
+  }
+
+  await new Promise(r => setTimeout(r, 600));
+  removeLoading();
+
+  addMessage('ai', greeting, null, frenchGreetings[timeOfDay]);
+  conversationHistory.push({ role: 'assistant', content: greeting });
+  speak(greeting.replace(/[😊🌟🧒⭐]/g, ''));
+  resetInactivityTimer();
+}
+
+autoGreet();
+
+// ===== GENTLE NUDGE IF INACTIVE =====
+let inactivityTimer = null;
+
+function resetInactivityTimer() {
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(nudgeUser, 45000);
+}
+
+async function nudgeUser() {
+  if (isProcessing) return;
+  
+  const mem = getMemory();
+  const name = mem.name || 'Grand-Papa';
+  let nudge;
+
+  // Build adaptive nudges based on what we know
+  const nudges = [];
+
+  // Always include some basic ones
+  nudges.push(`Still there, ${name}? No rush! You can speak or type whenever you're ready. Would you like me to teach you a new word?`);
+  nudges.push(`Take your time, ${name}! Here's a useful phrase: "I love spending time with you." Can you try saying that?`);
+
+  // Add grandkid-specific nudges if we know their names
+  if (mem.grandkidsNames.length > 0) {
+    const kid = mem.grandkidsNames[Math.floor(Math.random() * mem.grandkidsNames.length)];
+    nudges.push(`Imagine ${kid} comes running to you and says: "Grandpa, I'm hungry!" What do you say?`);
+    nudges.push(`Quick practice: How would you tell ${kid} "I love you" in English?`);
+    nudges.push(`${kid} says: "Grandpa, can we go outside?" What's your answer?`);
+  } else {
+    nudges.push(`Imagine your grandchild says: "Grandpa, I'm thirsty!" What would you say to them?`);
+  }
+
+  // Review recently learned words
+  if (mem.wordsLearned.length > 0) {
+    const word = mem.wordsLearned[Math.floor(Math.random() * mem.wordsLearned.length)];
+    nudges.push(`Quick review! Do you remember the word "${word}"? Can you use it in a sentence?`);
+  }
+
+  // Practice common mistakes
+  if (mem.commonMistakes.length > 0) {
+    nudges.push(`Let's practice something: Can you say "I went to the park yesterday"? The past tense is tricky but you're getting better!`);
+  }
+
+  // Favorite topic nudge
+  if (mem.favoriteTopics && Object.keys(mem.favoriteTopics).length > 0) {
+    const top = Object.entries(mem.favoriteTopics).sort((a,b) => b[1]-a[1])[0][0];
+    if (top === 'church') nudges.push(`${name}, how do you say "Let us pray" in English? Try it!`);
+    if (top === 'playground') nudges.push(`Quick game: Can you name 3 things you see at a playground? In English!`);
+  }
+
+  nudge = nudges[Math.floor(Math.random() * nudges.length)];
+  addMessage('ai', nudge, null, "Prenez votre temps ! Je suis là quand vous êtes prêt.");
+  conversationHistory.push({ role: 'assistant', content: nudge });
+  speak(nudge);
+}
+
+// Reset timer on any interaction
+document.getElementById('textInput').addEventListener('input', resetInactivityTimer);
+document.getElementById('textInput').addEventListener('focus', resetInactivityTimer);
+document.getElementById('micBtn').addEventListener('click', resetInactivityTimer);
+
+// Start the inactivity timer
+resetInactivityTimer();
+
 if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
+
+// Save conversation summary when leaving
+window.addEventListener('beforeunload', () => {
+  if (conversationHistory.length > 2) {
+    const mem = getMemory();
+    const lastUserMsgs = conversationHistory.filter(m => m.role === 'user').slice(-3).map(m => m.content).join('. ');
+    mem.lastConversationSummary = lastUserMsgs.slice(0, 200);
+    saveMemory(mem);
+  }
+});
 </script>
 </body>
 </html>
