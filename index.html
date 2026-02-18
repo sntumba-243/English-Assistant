@@ -240,6 +240,32 @@ html, body {
   .header-left h1 { font-size: 1rem; }
   .tab { font-size: 0.72rem; }
 }
+
+/* UPDATE BANNER ANIMATION */
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+/* PULL TO REFRESH */
+.ptr-indicator {
+  text-align: center;
+  padding: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s, padding 0.3s;
+  color: var(--blue);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.ptr-indicator.visible {
+  max-height: 50px;
+  padding: 10px 0;
+}
+.ptr-indicator.refreshing {
+  max-height: 50px;
+  padding: 10px 0;
+}
 </style>
 </head>
 <body>
@@ -251,6 +277,8 @@ html, body {
       <span>Votre compagnon pour apprendre l'anglais</span>
     </div>
     <div class="header-right">
+      <button class="header-btn" onclick="newChat()" title="New chat / Nouveau chat">💬</button>
+      <button class="header-btn" onclick="forceRefresh()" title="Check for updates / Vérifier les mises à jour">🔄</button>
       <button class="header-btn" onclick="openSettings()">⚙️</button>
     </div>
   </div>
@@ -262,6 +290,7 @@ html, body {
   </div>
 
   <div class="chat" id="chatArea">
+    <div class="ptr-indicator" id="ptrIndicator">🔄 Release to start new chat / Relâchez pour recommencer</div>
     <div class="welcome" id="welcomeCard">
       <h2>Bienvenue, Grand-Papa!</h2>
       <p>I'll help you talk with your grandchildren and respond with confidence!</p>
@@ -448,6 +477,28 @@ function getMemoryContext() {
 
 function openSettings() { document.getElementById('drawerOverlay').classList.add('open'); document.getElementById('drawer').classList.add('open'); }
 function closeSettings() { document.getElementById('drawerOverlay').classList.remove('open'); document.getElementById('drawer').classList.remove('open'); }
+
+function newChat() {
+  // Save summary of current conversation before clearing
+  if (conversationHistory.length > 2) {
+    const mem = getMemory();
+    const lastUserMsgs = conversationHistory.filter(m => m.role === 'user').slice(-3).map(m => m.content).join('. ');
+    mem.lastConversationSummary = lastUserMsgs.slice(0, 200);
+    saveMemory(mem);
+  }
+
+  // Stop any speech
+  if (synthesis) synthesis.cancel();
+  if (isRecording) stopRecording();
+
+  // Clear everything
+  clearChat();
+  isProcessing = false;
+  setStatus('');
+
+  // Start fresh greeting (memory-aware)
+  autoGreet();
+}
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition) {
@@ -858,7 +909,105 @@ document.getElementById('micBtn').addEventListener('click', resetInactivityTimer
 // Start the inactivity timer
 resetInactivityTimer();
 
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+      
+      // Check for updates every 30 seconds
+      setInterval(() => { reg.update(); }, 30000);
+
+      // Detect when a new service worker is waiting
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        if (newSW) {
+          newSW.addEventListener('statechange', () => {
+            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+              // New version available — show update banner
+              showUpdateBanner();
+            }
+          });
+        }
+      });
+
+      // Listen for SW messages (update notification)
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data.type === 'SW_UPDATED') {
+          showUpdateBanner();
+        }
+      });
+
+    } catch(e) { console.log('SW failed:', e); }
+  });
+}
+
+// ===== UPDATE BANNER =====
+function showUpdateBanner() {
+  // Don't show if already visible
+  if (document.getElementById('updateBanner')) return;
+  
+  const banner = document.createElement('div');
+  banner.id = 'updateBanner';
+  banner.innerHTML = `
+    <span>🔄 New version available!</span>
+    <button onclick="applyUpdate()">Update now</button>
+  `;
+  banner.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: linear-gradient(135deg, var(--navy), var(--blue));
+    color: white; display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; font-size: 0.85rem; font-family: inherit;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    animation: slideDown 0.3s ease;
+  `;
+  banner.querySelector('button').style.cssText = `
+    background: white; color: var(--navy); border: none; border-radius: 20px;
+    padding: 8px 18px; font-weight: 600; font-size: 0.8rem; cursor: pointer;
+    font-family: inherit; white-space: nowrap;
+  `;
+  document.body.prepend(banner);
+}
+
+function applyUpdate() {
+  // Tell waiting SW to take over
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => {
+      if (reg.waiting) {
+        reg.waiting.postMessage('SKIP_WAITING');
+      }
+    });
+  }
+  // Hard reload — clears cache and gets fresh files
+  window.location.reload(true);
+}
+
+// ===== MANUAL REFRESH BUTTON =====
+function forceRefresh() {
+  // Save conversation to memory first
+  if (conversationHistory.length > 2) {
+    const mem = getMemory();
+    const lastUserMsgs = conversationHistory.filter(m => m.role === 'user').slice(-3).map(m => m.content).join('. ');
+    mem.lastConversationSummary = lastUserMsgs.slice(0, 200);
+    saveMemory(mem);
+  }
+
+  // Unregister service worker to force fresh download
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+    });
+  }
+
+  // Clear all caches
+  if ('caches' in window) {
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  }
+
+  // Hard reload after a brief delay
+  setTimeout(() => {
+    window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now();
+  }, 300);
+}
 
 // Save conversation summary when leaving
 window.addEventListener('beforeunload', () => {
@@ -869,6 +1018,45 @@ window.addEventListener('beforeunload', () => {
     saveMemory(mem);
   }
 });
+
+// ===== PULL TO REFRESH =====
+let ptrStartY = 0;
+let ptrTriggered = false;
+const chatEl = document.getElementById('chatArea');
+const ptrEl = document.getElementById('ptrIndicator');
+
+chatEl.addEventListener('touchstart', (e) => {
+  if (chatEl.scrollTop <= 0) {
+    ptrStartY = e.touches[0].clientY;
+    ptrTriggered = false;
+  }
+}, { passive: true });
+
+chatEl.addEventListener('touchmove', (e) => {
+  if (ptrStartY === 0) return;
+  const diff = e.touches[0].clientY - ptrStartY;
+  if (diff > 60 && chatEl.scrollTop <= 0) {
+    ptrEl.classList.add('visible');
+    ptrTriggered = true;
+  } else {
+    ptrEl.classList.remove('visible');
+    ptrTriggered = false;
+  }
+}, { passive: true });
+
+chatEl.addEventListener('touchend', () => {
+  if (ptrTriggered) {
+    ptrEl.textContent = '🔄 Starting new chat...';
+    ptrEl.classList.add('refreshing');
+    setTimeout(() => {
+      ptrEl.classList.remove('visible', 'refreshing');
+      ptrEl.textContent = '🔄 Release to start new chat / Relâchez pour recommencer';
+      newChat();
+    }, 500);
+  }
+  ptrStartY = 0;
+  ptrTriggered = false;
+}, { passive: true });
 </script>
 </body>
 </html>
