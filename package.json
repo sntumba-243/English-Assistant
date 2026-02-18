@@ -1,0 +1,9 @@
+{
+  "name": "mon-assistant-anglais",
+  "version": "1.0.0",
+  "description": "Interactive English teaching assistant for a French-speaking grandfather",
+  "scripts": {
+    "start": "npx serve public",
+    "build": "echo 'Static site - no build needed'"
+  }
+}
